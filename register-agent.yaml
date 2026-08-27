@@ -17,9 +17,10 @@
     # Address the VM uses to reach published 5665. Override in Semaphore extra vars.
     icinga_master_host: "10.1.5.151"
     icinga_master_port: 5665
+    generic_host_template_name: generic-host
 
   tasks:
-    - name: Create generic-host template in Director
+    - name: Create {{ generic_host_template_name }} template in Director
       ansible.builtin.uri:
         url: "{{ director_url }}/director/host"
         method: POST
@@ -31,7 +32,7 @@
           Accept: "application/json"
         body_format: json
         body:
-          object_name: generic-host
+          object_name: "{{ generic_host_template_name }}"
           object_type: template
           check_command: hostalive
           max_check_attempts: 3
@@ -60,7 +61,7 @@
           object_name: icinga-agent
           object_type: template
           imports:
-            - generic-host
+            - "{{ generic_host_template_name }}"
           zone: "{{ cluster_zone }}"
           has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"
@@ -84,7 +85,7 @@
         body_format: json
         body:
           imports:
-            - generic-host
+            - "{{ generic_host_template_name }}"
           zone: "{{ cluster_zone }}"
           has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"

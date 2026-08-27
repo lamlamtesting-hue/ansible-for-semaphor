@@ -3,7 +3,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    director_url: "http://host.docker.internal:8080"
+    # director_url: "http://host.docker.internal:8080"
     host_name: "web-server-google-02"
     host_ip: "8.8.8.8"
 
