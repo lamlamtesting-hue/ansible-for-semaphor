@@ -4,9 +4,7 @@
   gather_facts: false
   vars:
     icinga_url: "https://host.docker.internal:5665/v1"
-    icinga_api_user: "icingaweb"
-    icinga_api_pass: "icingaweb"
-    host_name: "web-server-01"
+    host_name: "web-server-google"
     host_ip: "8.8.8.8"
 
   tasks:
