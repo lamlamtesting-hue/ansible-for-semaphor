@@ -1,0 +1,60 @@
+---
+# Scan common access ports on a target VM from Semaphore. Does not log in.
+# Override host_ip with Semaphore extra vars.
+- name: Scan target VM ports
+  hosts: localhost
+  gather_facts: false
+  vars:
+    host_ip: "172.21.42.206"
+    scan_timeout: 3
+    scan_ports:
+      - { port: 22, name: ssh }
+      - { port: 2222, name: ssh_alt }
+      - { port: 5985, name: winrm_http }
+      - { port: 5986, name: winrm_https }
+      - { port: 3389, name: rdp }
+      - { port: 445, name: smb }
+      - { port: 135, name: msrpc }
+      - { port: 80, name: http }
+      - { port: 443, name: https }
+      - { port: 5665, name: icinga2 }
+    extra_scan_ports: []
+
+  tasks:
+    - name: TCP connect scan
+      ansible.builtin.wait_for:
+        host: "{{ host_ip }}"
+        port: "{{ item.port }}"
+        timeout: "{{ scan_timeout }}"
+        state: started
+        msg: "{{ item.name }} ({{ item.port }}/tcp) is not reachable"
+      loop: "{{ scan_ports + extra_scan_ports }}"
+      loop_control:
+        label: "{{ item.name }} {{ item.port }}/tcp"
+      register: port_scan
+      ignore_errors: true
+      changed_when: false
+
+    - name: Build open and closed port lists
+      ansible.builtin.set_fact:
+        open_ports: "{{ port_scan.results | rejectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+        closed_ports: "{{ port_scan.results | selectattr('failed', 'equalto', true) | map(attribute='item') | list }}"
+
+    - name: Port scan summary
+      ansible.builtin.debug:
+        msg: |
+          === Port scan {{ host_ip }} ===
+          OPEN:   {% for p in open_ports %}{{ p.name }}/{{ p.port }}{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}
+          CLOSED: {% for p in closed_ports %}{{ p.name }}/{{ p.port }}{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}
+
+          Likely access method:
+          {% set ports = open_ports | map(attribute='port') | map('int') | list %}
+          {% if 22 in ports or 2222 in ports %}
+          SSH (port {{ 22 if 22 in ports else 2222 }})
+          {% elif 5986 in ports %}
+          WinRM HTTPS (5986)
+          {% elif 5985 in ports %}
+          WinRM HTTP (5985)
+          {% else %}
+          No SSH (22/2222) or WinRM (5985/5986) reachable from this runner.
+          {% endif %}
