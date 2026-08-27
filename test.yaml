@@ -1,29 +1,42 @@
 ---
-- name: Create a Host in Icinga 2
+- name: Create a Host in Icinga Director
   hosts: localhost
   gather_facts: false
   vars:
-    icinga_url: "https://host.docker.internal:5665/v1"
-    host_name: "web-server-google"
+    director_url: "http://host.docker.internal:8080"
+    host_name: "web-server-google-01"
     host_ip: "8.8.8.8"
 
   tasks:
-    - name: Create host object via Icinga 2 API
+    - name: Create host object via Director API
       ansible.builtin.uri:
-        url: "{{ icinga_url }}/objects/hosts/{{ host_name }}"
-        method: PUT
-        url_username: "{{ icinga_api_user }}"
-        url_password: "{{ icinga_api_pass }}"
+        url: "{{ director_url }}/director/host"
+        method: POST
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
         force_basic_auth: true
         validate_certs: false
         headers:
           Accept: "application/json"
         body_format: json
         body:
-          templates:
-            - "generic-host"
-          attrs:
-            address: "{{ host_ip }}"
-            vars:
-              os: "Linux"
-        status_code: [200, 422]
+          object_name: "{{ host_name }}"
+          object_type: object
+          address: "{{ host_ip }}"
+          imports:
+            - generic-host
+          vars:
+            os: Linux
+        status_code: [201, 304]
+
+    - name: Deploy Director config to Icinga 2
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/config/deploy"
+        method: POST
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 201]
