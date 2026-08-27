@@ -1,0 +1,146 @@
+---
+- name: Register an Icinga 2 Agent host in Director
+  hosts: localhost
+  gather_facts: false
+  vars:
+    director_url: "http://host.docker.internal:8080"
+    host_name: "web-server-agent-01"
+    host_ip: "172.21.42.206"
+    # true  = master connects out to the agent on 5665 (agent must be reachable)
+    # false = agent connects in to the master
+    master_should_connect: true
+    accept_config: true
+
+  tasks:
+    - name: Create generic-host template in Director
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/host"
+        method: POST
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        body_format: json
+        body:
+          object_name: generic-host
+          object_type: template
+          check_command: hostalive
+          max_check_attempts: 3
+          check_interval: 1m
+          retry_interval: 30s
+        status_code: [201, 500]
+      register: generic_host_template
+      failed_when:
+        - generic_host_template.status != 201
+        - "'Trying to recreate' not in (generic_host_template.json.error | default(''))"
+
+    # Agent flags belong on a template, not on the host object.
+    - name: Create icinga-agent template in Director
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/host"
+        method: POST
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        body_format: json
+        body:
+          object_name: icinga-agent
+          object_type: template
+          imports:
+            - generic-host
+          has_agent: true
+          accept_config: "{{ accept_config }}"
+          master_should_connect: "{{ master_should_connect }}"
+        status_code: [201, 500]
+      register: agent_template
+      failed_when:
+        - agent_template.status != 201
+        - "'Trying to recreate' not in (agent_template.json.error | default(''))"
+
+    - name: Check if host already exists in Director
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/host?name={{ host_name }}"
+        method: GET
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 404]
+      register: existing_host
+
+    - name: Create agent host in Director
+      when: existing_host.status == 404
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/host"
+        method: POST
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        body_format: json
+        body:
+          object_name: "{{ host_name }}"
+          object_type: object
+          address: "{{ host_ip }}"
+          imports:
+            - icinga-agent
+          vars:
+            os: Linux
+        status_code: [201]
+
+    - name: Attach icinga-agent template to existing host
+      when: existing_host.status == 200
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/host?name={{ host_name }}"
+        method: POST
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        body_format: json
+        body:
+          address: "{{ host_ip }}"
+          imports:
+            - icinga-agent
+        status_code: [200, 304]
+
+    - name: Deploy Director config to Icinga 2
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/config/deploy"
+        method: POST
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        status_code: [200, 201]
+
+    - name: Fetch agent ticket from Director
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/host/ticket?name={{ host_name }}"
+        method: GET
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        return_content: true
+        status_code: [200]
+      register: agent_ticket
+
+    - name: Show agent ticket for node wizard
+      ansible.builtin.debug:
+        msg: "Agent ticket for {{ host_name }}: {{ agent_ticket.json }}"
