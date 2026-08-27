@@ -1,0 +1,31 @@
+---
+- name: Create a Host in Icinga 2
+  hosts: localhost
+  gather_facts: false
+  vars:
+    icinga_url: "https://host.docker.internal:5665/v1"
+    icinga_api_user: "icingaweb"
+    icinga_api_pass: "icingaweb"
+    host_name: "web-server-01"
+    host_ip: "8.8.8.8"
+
+  tasks:
+    - name: Create host object via Icinga 2 API
+      ansible.builtin.uri:
+        url: "{{ icinga_url }}/objects/hosts/{{ host_name }}"
+        method: PUT
+        url_username: "{{ icinga_api_user }}"
+        url_password: "{{ icinga_api_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        body_format: json
+        body:
+          templates:
+            - "generic-host"
+          attrs:
+            address: "{{ host_ip }}"
+            vars:
+              os: "Linux"
+        status_code: [200, 422]
