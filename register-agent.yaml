@@ -6,10 +6,12 @@
     director_url: "http://host.docker.internal:8080"
     host_name: "web-server-agent-01"
     host_ip: "172.21.42.206"
-    # true  = master connects out to the agent on 5665 (agent must be reachable)
-    # false = agent connects in to the master
-    master_should_connect: true
-    accept_config: true
+    # Matches Director UI: Icinga Agent and zone settings
+    # Cluster Zone / Icinga2 Agent / Establish connection / Accepts config
+    cluster_zone: master
+    has_agent: "y"
+    master_should_connect: "y"
+    accept_config: "y"
 
   tasks:
     - name: Create generic-host template in Director
@@ -36,7 +38,8 @@
         - generic_host_template.status != 201
         - "'Trying to recreate' not in (generic_host_template.json.error | default(''))"
 
-    # Agent flags belong on a template, not on the host object.
+    # Agent flags belong on a template. POST create is skipped if it already
+    # exists, so the next task always writes has_agent=y onto the template.
     - name: Create icinga-agent template in Director
       ansible.builtin.uri:
         url: "{{ director_url }}/director/host"
@@ -53,14 +56,35 @@
           object_type: template
           imports:
             - generic-host
-          has_agent: true
-          accept_config: "{{ accept_config }}"
+          zone: "{{ cluster_zone }}"
+          has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"
+          accept_config: "{{ accept_config }}"
         status_code: [201, 500]
       register: agent_template
       failed_when:
         - agent_template.status != 201
         - "'Trying to recreate' not in (agent_template.json.error | default(''))"
+
+    - name: Set agent flags on icinga-agent template
+      ansible.builtin.uri:
+        url: "{{ director_url }}/director/host?name=icinga-agent"
+        method: POST
+        url_username: "{{ icinga_web_user }}"
+        url_password: "{{ icinga_web_pass }}"
+        force_basic_auth: true
+        validate_certs: false
+        headers:
+          Accept: "application/json"
+        body_format: json
+        body:
+          imports:
+            - generic-host
+          zone: "{{ cluster_zone }}"
+          has_agent: "{{ has_agent }}"
+          master_should_connect: "{{ master_should_connect }}"
+          accept_config: "{{ accept_config }}"
+        status_code: [200, 304]
 
     - name: Check if host already exists in Director
       ansible.builtin.uri:
@@ -93,6 +117,10 @@
           address: "{{ host_ip }}"
           imports:
             - icinga-agent
+          zone: "{{ cluster_zone }}"
+          has_agent: "{{ has_agent }}"
+          master_should_connect: "{{ master_should_connect }}"
+          accept_config: "{{ accept_config }}"
           vars:
             os: Linux
         status_code: [201]
@@ -113,6 +141,10 @@
           address: "{{ host_ip }}"
           imports:
             - icinga-agent
+          zone: "{{ cluster_zone }}"
+          has_agent: "{{ has_agent }}"
+          master_should_connect: "{{ master_should_connect }}"
+          accept_config: "{{ accept_config }}"
         status_code: [200, 304]
 
     - name: Deploy Director config to Icinga 2
