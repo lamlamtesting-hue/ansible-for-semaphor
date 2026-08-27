@@ -8,12 +8,12 @@
     host_ip: "8.8.8.8"
 
   tasks:
-    # Director templates are separate from Icinga 2 conf.d templates.
-    # generic-host in templates.conf is not imported into Director automatically.
-    - name: Ensure generic-host template exists in Director
+    # Director: POST /director/host creates. PUT/POST with ?name= only works
+    # if the object already exists (otherwise 404 "No such object available").
+    - name: Create generic-host template in Director
       ansible.builtin.uri:
-        url: "{{ director_url }}/director/host?name=generic-host"
-        method: PUT
+        url: "{{ director_url }}/director/host"
+        method: POST
         url_username: "{{ icinga_web_user }}"
         url_password: "{{ icinga_web_pass }}"
         force_basic_auth: true
@@ -28,12 +28,16 @@
           max_check_attempts: 3
           check_interval: 1m
           retry_interval: 30s
-        status_code: [200, 201, 304]
+        status_code: [201, 500]
+      register: generic_host_template
+      failed_when:
+        - generic_host_template.status != 201
+        - "'Trying to recreate' not in (generic_host_template.json.error | default(''))"
 
     - name: Create host object via Director API
       ansible.builtin.uri:
-        url: "{{ director_url }}/director/host?name={{ host_name }}"
-        method: PUT
+        url: "{{ director_url }}/director/host"
+        method: POST
         url_username: "{{ icinga_web_user }}"
         url_password: "{{ icinga_web_pass }}"
         force_basic_auth: true
@@ -49,7 +53,11 @@
             - generic-host
           vars:
             os: Linux
-        status_code: [200, 201, 304]
+        status_code: [201, 500]
+      register: director_host
+      failed_when:
+        - director_host.status != 201
+        - "'Trying to recreate' not in (director_host.json.error | default(''))"
 
     - name: Deploy Director config to Icinga 2
       ansible.builtin.uri:
