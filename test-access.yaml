@@ -5,7 +5,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    host_ip: "172.21.42.206"
+    # host_ip: "172.21.42.206"
     scan_timeout: 3
     scan_ports:
       - { port: 22, name: ssh }
