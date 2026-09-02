@@ -1,20 +1,23 @@
 ---
-- name: Register an Icinga 2 Agent host in Director
+- name: Register agents in Director and build WinRM inventory
   hosts: localhost
   gather_facts: false
   vars:
     director_url: "http://10.1.5.151:8080"
-    host_name: "lamtest-agent-01"
-    # host_ip: "172.21.42.206"
-    # Matches Director UI: Icinga Agent and zone settings
-    # Cluster Zone / Icinga2 Agent / Establish connection / Accepts config
-    cluster_zone: master
+    # Semaphore Extra variables JSON.
+    # Cluster Zone in Director: master | LC-icinga-slave01 | lc-satellites
+# {
+#   "icinga_master_cn": "icinga2",
+#   "cluster_zone": "master",
+#   "icinga_agent_hosts": [
+#     { "host_ip": "10.1.5.10", "cn": "win-agent-01", "cluster_zone": "master" },
+#     { "host_ip": "10.1.5.11", "cn": "win-agent-02", "cluster_zone": "LC-icinga-slave01", "icinga_master_cn": "LC-icinga-slave01" },
+#     { "host_ip": "10.1.5.12", "cn": "win-agent-03", "cluster_zone": "lc-satellites" }
+#   ]
+# }
     has_agent: "y"
     master_should_connect: "y"
     accept_config: "y"
-    # Endpoint CN inside Icinga (docker-compose hostname)
-    icinga_master_cn: icinga2
-    # Address the VM uses to reach published 5665. Override in Semaphore extra vars.
     icinga_master_host: "10.1.5.151"
     icinga_master_port: 5665
     generic_host_template_name: generic-host-lam
@@ -27,6 +30,50 @@
     # agent_winrm_pass: ""
 
   tasks:
+    - name: Normalize agent host list
+      ansible.builtin.set_fact:
+        agent_hosts: "{{ (icinga_agent_hosts | from_json) if (icinga_agent_hosts is defined and icinga_agent_hosts is string) else (icinga_agent_hosts | default([{'host_ip': host_ip, 'cn': cn}])) }}"
+
+    - name: Require icinga_master_cn from extra vars
+      ansible.builtin.assert:
+        that:
+          - icinga_master_cn is defined
+          - icinga_master_cn | length > 0
+        fail_msg: Set icinga_master_cn in Semaphore extra vars JSON (parent Endpoint CN).
+
+    - name: Require host_ip and cn on every agent
+      ansible.builtin.assert:
+        that:
+          - item.host_ip is defined
+          - item.host_ip | length > 0
+          - (item.cn | default(item.host_name | default('')) | length > 0)
+          - (item.cluster_zone | default(cluster_zone | default('')) | length > 0)
+        fail_msg: Each agent needs host_ip, cn, and cluster_zone (Director: master, LC-icinga-slave01, or lc-satellites).
+      loop: "{{ agent_hosts }}"
+      loop_control:
+        label: "{{ item.host_ip | default('missing host_ip') }}"
+
+    - name: Build agent list with cn
+      ansible.builtin.set_fact:
+        agent_hosts_named: "{{ agent_hosts_named | default([]) + [item | combine({'cn': (item.cn | default(item.host_name | default('')) | trim), 'cluster_zone': (item.cluster_zone | default(cluster_zone))})] }}"
+      loop: "{{ agent_hosts }}"
+      loop_control:
+        label: "{{ item.host_ip }} / {{ item.cn | default(item.host_name | default('missing cn')) }}"
+
+    - name: Use named agent host list
+      ansible.builtin.set_fact:
+        agent_hosts: "{{ agent_hosts_named }}"
+
+    - name: Require unique host_ip and cn
+      ansible.builtin.assert:
+        that:
+          - (agent_hosts | map(attribute='host_ip') | list | length) == (agent_hosts | map(attribute='host_ip') | unique | list | length)
+          - (agent_hosts | map(attribute='cn') | list | length) == (agent_hosts | map(attribute='cn') | unique | list | length)
+        fail_msg: >-
+          Each agent needs a different host_ip and a different cn.
+          IPs: {{ agent_hosts | map(attribute='host_ip') | list }}
+          CNs: {{ agent_hosts | map(attribute='cn') | list }}
+
     - name: Create {{ generic_host_template_name }} template in Director
       ansible.builtin.uri:
         url: "{{ director_url }}/director/host"
@@ -69,7 +116,6 @@
           object_type: template
           imports:
             - "{{ generic_host_template_name }}"
-          zone: "{{ cluster_zone }}"
           has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"
           accept_config: "{{ accept_config }}"
@@ -93,7 +139,6 @@
         body:
           imports:
             - "{{ generic_host_template_name }}"
-          zone: "{{ cluster_zone }}"
           has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"
           accept_config: "{{ accept_config }}"
@@ -101,7 +146,7 @@
 
     - name: Check if host already exists in Director
       ansible.builtin.uri:
-        url: "{{ director_url }}/director/host?name={{ host_name }}"
+        url: "{{ director_url }}/director/host?name={{ item.cn }}"
         method: GET
         url_username: "{{ icinga_web_user }}"
         url_password: "{{ icinga_web_pass }}"
@@ -110,10 +155,13 @@
         headers:
           Accept: "application/json"
         status_code: [200, 404]
-      register: existing_host
+      loop: "{{ agent_hosts }}"
+      loop_control:
+        label: "{{ item.cn }} ({{ item.host_ip }})"
+      register: existing_hosts
 
     - name: Create agent host in Director
-      when: existing_host.status == 404
+      when: item.status == 404
       ansible.builtin.uri:
         url: "{{ director_url }}/director/host"
         method: POST
@@ -125,23 +173,26 @@
           Accept: "application/json"
         body_format: json
         body:
-          object_name: "{{ host_name }}"
+          object_name: "{{ item.item.cn }}"
           object_type: object
-          address: "{{ host_ip }}"
+          address: "{{ item.item.host_ip }}"
           imports:
             - "{{ icinga_agent_template_name }}"
-          zone: "{{ cluster_zone }}"
+          zone: "{{ item.item.cluster_zone }}"
           has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"
           accept_config: "{{ accept_config }}"
           vars:
             os: Windows
         status_code: [201]
+      loop: "{{ existing_hosts.results }}"
+      loop_control:
+        label: "{{ item.item.cn }} ({{ item.item.host_ip }})"
 
     - name: Attach {{ icinga_agent_template_name }} template to existing host
-      when: existing_host.status == 200
+      when: item.status == 200
       ansible.builtin.uri:
-        url: "{{ director_url }}/director/host?name={{ host_name }}"
+        url: "{{ director_url }}/director/host?name={{ item.item.cn }}"
         method: POST
         url_username: "{{ icinga_web_user }}"
         url_password: "{{ icinga_web_pass }}"
@@ -151,14 +202,17 @@
           Accept: "application/json"
         body_format: json
         body:
-          address: "{{ host_ip }}"
+          address: "{{ item.item.host_ip }}"
           imports:
             - "{{ icinga_agent_template_name }}"
-          zone: "{{ cluster_zone }}"
+          zone: "{{ item.item.cluster_zone }}"
           has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"
           accept_config: "{{ accept_config }}"
         status_code: [200, 304]
+      loop: "{{ existing_hosts.results }}"
+      loop_control:
+        label: "{{ item.item.cn }} ({{ item.item.host_ip }})"
 
     - name: Deploy Director config to Icinga 2
       ansible.builtin.uri:
@@ -174,7 +228,7 @@
 
     - name: Fetch agent ticket from Director
       ansible.builtin.uri:
-        url: "{{ director_url }}/director/host/ticket?name={{ host_name }}"
+        url: "{{ director_url }}/director/host/ticket?name={{ item.cn }}"
         method: GET
         url_username: "{{ icinga_web_user }}"
         url_password: "{{ icinga_web_pass }}"
@@ -184,32 +238,42 @@
           Accept: "application/json"
         return_content: true
         status_code: [200]
-      register: agent_ticket
+      loop: "{{ agent_hosts }}"
+      loop_control:
+        label: "{{ item.cn }}"
+      register: agent_tickets
 
     - name: Show agent ticket for node wizard
       ansible.builtin.debug:
-        msg: "Agent ticket for {{ host_name }}: {{ agent_ticket.json }}"
+        msg: "Agent ticket for {{ item.item.cn }} ({{ item.item.host_ip }}): {{ item.json }}"
+      loop: "{{ agent_tickets.results }}"
+      loop_control:
+        label: "{{ item.item.cn }}"
 
-    - name: Add target VM to in-memory inventory
+    - name: Add target VMs to in-memory inventory
       ansible.builtin.add_host:
-        name: "{{ host_name }}"
-        ansible_host: "{{ host_ip }}"
+        name: "{{ item.item.cn }}"
+        ansible_host: "{{ item.item.host_ip }}"
         ansible_connection: winrm
-        ansible_port: "{{ agent_winrm_port }}"
-        ansible_user: "{{ agent_winrm_user }}"
-        ansible_password: "{{ agent_winrm_pass }}"
+        ansible_port: "{{ item.item.agent_winrm_port | default(agent_winrm_port) }}"
+        ansible_user: "{{ item.item.agent_winrm_user | default(agent_winrm_user) }}"
+        ansible_password: "{{ item.item.agent_winrm_pass | default(agent_winrm_pass) }}"
         ansible_winrm_transport: "{{ agent_winrm_transport }}"
         ansible_winrm_server_cert_validation: "{{ agent_winrm_server_cert_validation }}"
-        ansible_winrm_scheme: "{{ agent_winrm_scheme }}"
+        ansible_winrm_scheme: "{{ item.item.agent_winrm_scheme | default(agent_winrm_scheme) }}"
         groups: icinga_agents
-        icinga_ticket: "{{ agent_ticket.json }}"
-        cluster_zone: "{{ cluster_zone }}"
+        icinga_host_name: "{{ item.item.cn }}"
+        icinga_ticket: "{{ item.json }}"
+        cluster_zone: "{{ item.item.cluster_zone }}"
         master_should_connect: "{{ master_should_connect }}"
-        icinga_master_cn: "{{ icinga_master_cn }}"
-        icinga_master_host: "{{ icinga_master_host }}"
+        icinga_master_cn: "{{ item.item.icinga_master_cn | default(icinga_master_cn) }}"
+        icinga_master_host: "{{ item.item.icinga_master_host | default(icinga_master_host) }}"
         icinga_master_port: "{{ icinga_master_port }}"
+      loop: "{{ agent_tickets.results }}"
+      loop_control:
+        label: "{{ item.item.cn }} ({{ item.item.host_ip }})"
 
-- name: Install Icinga 2 agent on the target VM
+- name: Install Icinga 2 agent on the target VMs
   hosts: icinga_agents
   gather_facts: true
   vars:
@@ -253,7 +317,7 @@
 
     - name: Check if agent certificate already exists
       ansible.windows.win_stat:
-        path: "{{ icinga_cert_dir }}\\{{ inventory_hostname }}.crt"
+        path: "{{ icinga_cert_dir }}\\{{ icinga_host_name }}.crt"
       register: agent_cert
 
     - name: Run icinga2 node setup with Director ticket
@@ -266,9 +330,9 @@
           - --ticket
           - "{{ icinga_ticket }}"
           - --cn
-          - "{{ inventory_hostname }}"
+          - "{{ icinga_host_name }}"
           - --zone
-          - "{{ inventory_hostname }}"
+          - "{{ icinga_host_name }}"
           - --endpoint
           - "{{ icinga_parent_endpoint }}"
           - --parent_host
