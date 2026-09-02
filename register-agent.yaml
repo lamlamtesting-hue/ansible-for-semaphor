@@ -4,7 +4,7 @@
   gather_facts: false
   vars:
     director_url: "http://host.docker.internal:8080"
-    host_name: "web-server-agent-01"
+    host_name: "lamtest-agent-01"
     # host_ip: "172.21.42.206"
     # Matches Director UI: Icinga Agent and zone settings
     # Cluster Zone / Icinga2 Agent / Establish connection / Accepts config
@@ -17,7 +17,7 @@
     # Address the VM uses to reach published 5665. Override in Semaphore extra vars.
     icinga_master_host: "10.1.5.151"
     icinga_master_port: 5665
-    generic_host_template_name: generic-host
+    generic_host_template_name: generic-host-lam
 
   tasks:
     - name: Create {{ generic_host_template_name }} template in Director
@@ -183,140 +183,140 @@
       ansible.builtin.debug:
         msg: "Agent ticket for {{ host_name }}: {{ agent_ticket.json }}"
 
-    - name: Add target VM to in-memory inventory
-      ansible.builtin.add_host:
-        name: "{{ host_name }}"
-        ansible_host: "{{ host_ip }}"
-        ansible_port: "{{ agent_ssh_port | default(22) }}"
-        ansible_user: "{{ agent_ssh_user | default('root') }}"
-        ansible_password: "{{ agent_ssh_pass | default(omit) }}"
-        ansible_become_password: "{{ agent_become_pass | default(agent_ssh_pass) | default(omit) }}"
-        ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-        groups: icinga_agents
-        icinga_ticket: "{{ agent_ticket.json }}"
-        cluster_zone: "{{ cluster_zone }}"
-        master_should_connect: "{{ master_should_connect }}"
-        icinga_master_cn: "{{ icinga_master_cn }}"
-        icinga_master_host: "{{ icinga_master_host }}"
-        icinga_master_port: "{{ icinga_master_port }}"
+#     - name: Add target VM to in-memory inventory
+#       ansible.builtin.add_host:
+#         name: "{{ host_name }}"
+#         ansible_host: "{{ host_ip }}"
+#         ansible_port: "{{ agent_ssh_port | default(22) }}"
+#         ansible_user: "{{ agent_ssh_user | default('root') }}"
+#         ansible_password: "{{ agent_ssh_pass | default(omit) }}"
+#         ansible_become_password: "{{ agent_become_pass | default(agent_ssh_pass) | default(omit) }}"
+#         ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+#         groups: icinga_agents
+#         icinga_ticket: "{{ agent_ticket.json }}"
+#         cluster_zone: "{{ cluster_zone }}"
+#         master_should_connect: "{{ master_should_connect }}"
+#         icinga_master_cn: "{{ icinga_master_cn }}"
+#         icinga_master_host: "{{ icinga_master_host }}"
+#         icinga_master_port: "{{ icinga_master_port }}"
 
-- name: Install Icinga 2 agent on the target VM
-  hosts: icinga_agents
-  become: true
-  gather_facts: true
-  vars:
-    icinga_cert_dir: /var/lib/icinga2/certs
-    icinga_parent_endpoint: "{{ icinga_master_cn if master_should_connect == 'y' else (icinga_master_cn ~ ',' ~ icinga_master_host ~ ',' ~ icinga_master_port) }}"
+# - name: Install Icinga 2 agent on the target VM
+#   hosts: icinga_agents
+#   become: true
+#   gather_facts: true
+#   vars:
+#     icinga_cert_dir: /var/lib/icinga2/certs
+#     icinga_parent_endpoint: "{{ icinga_master_cn if master_should_connect == 'y' else (icinga_master_cn ~ ',' ~ icinga_master_host ~ ',' ~ icinga_master_port) }}"
 
-  tasks:
-    - name: Install apt helpers (Debian/Ubuntu)
-      ansible.builtin.apt:
-        name:
-          - apt-transport-https
-          - ca-certificates
-          - gnupg
-          - wget
-        state: present
-        update_cache: true
-      when: ansible_os_family == "Debian"
+#   tasks:
+#     - name: Install apt helpers (Debian/Ubuntu)
+#       ansible.builtin.apt:
+#         name:
+#           - apt-transport-https
+#           - ca-certificates
+#           - gnupg
+#           - wget
+#         state: present
+#         update_cache: true
+#       when: ansible_os_family == "Debian"
 
-    - name: Download Icinga GPG key
-      ansible.builtin.get_url:
-        url: https://packages.icinga.com/icinga.key
-        dest: /tmp/icinga.key
-        mode: "0644"
-      when: ansible_os_family == "Debian"
+#     - name: Download Icinga GPG key
+#       ansible.builtin.get_url:
+#         url: https://packages.icinga.com/icinga.key
+#         dest: /tmp/icinga.key
+#         mode: "0644"
+#       when: ansible_os_family == "Debian"
 
-    - name: Install Icinga GPG keyring
-      ansible.builtin.command:
-        cmd: gpg --dearmor --yes -o /usr/share/keyrings/icinga-archive-keyring.gpg /tmp/icinga.key
-        creates: /usr/share/keyrings/icinga-archive-keyring.gpg
-      when: ansible_os_family == "Debian"
+#     - name: Install Icinga GPG keyring
+#       ansible.builtin.command:
+#         cmd: gpg --dearmor --yes -o /usr/share/keyrings/icinga-archive-keyring.gpg /tmp/icinga.key
+#         creates: /usr/share/keyrings/icinga-archive-keyring.gpg
+#       when: ansible_os_family == "Debian"
 
-    - name: Add Icinga apt repository
-      ansible.builtin.copy:
-        dest: /etc/apt/sources.list.d/icinga.list
-        mode: "0644"
-        content: |
-          deb [signed-by=/usr/share/keyrings/icinga-archive-keyring.gpg] https://packages.icinga.com/{{ 'ubuntu' if ansible_distribution == 'Ubuntu' else 'debian' }} icinga-{{ ansible_distribution_release }} main
-      when: ansible_os_family == "Debian"
+#     - name: Add Icinga apt repository
+#       ansible.builtin.copy:
+#         dest: /etc/apt/sources.list.d/icinga.list
+#         mode: "0644"
+#         content: |
+#           deb [signed-by=/usr/share/keyrings/icinga-archive-keyring.gpg] https://packages.icinga.com/{{ 'ubuntu' if ansible_distribution == 'Ubuntu' else 'debian' }} icinga-{{ ansible_distribution_release }} main
+#       when: ansible_os_family == "Debian"
 
-    - name: Install icinga2 (Debian/Ubuntu)
-      ansible.builtin.apt:
-        name:
-          - icinga2
-          - monitoring-plugins
-        state: present
-        update_cache: true
-      when: ansible_os_family == "Debian"
+#     - name: Install icinga2 (Debian/Ubuntu)
+#       ansible.builtin.apt:
+#         name:
+#           - icinga2
+#           - monitoring-plugins
+#         state: present
+#         update_cache: true
+#       when: ansible_os_family == "Debian"
 
-    - name: Import Icinga RPM key
-      ansible.builtin.rpm_key:
-        key: https://packages.icinga.com/icinga.key
-        state: present
-      when: ansible_os_family == "RedHat"
+#     - name: Import Icinga RPM key
+#       ansible.builtin.rpm_key:
+#         key: https://packages.icinga.com/icinga.key
+#         state: present
+#       when: ansible_os_family == "RedHat"
 
-    - name: Add Icinga yum repository
-      ansible.builtin.yum_repository:
-        name: icinga-release
-        description: Icinga
-        baseurl: "https://packages.icinga.com/rhel/{{ ansible_distribution_major_version }}/release/"
-        gpgcheck: true
-        gpgkey: https://packages.icinga.com/icinga.key
-        enabled: true
-      when: ansible_os_family == "RedHat"
+#     - name: Add Icinga yum repository
+#       ansible.builtin.yum_repository:
+#         name: icinga-release
+#         description: Icinga
+#         baseurl: "https://packages.icinga.com/rhel/{{ ansible_distribution_major_version }}/release/"
+#         gpgcheck: true
+#         gpgkey: https://packages.icinga.com/icinga.key
+#         enabled: true
+#       when: ansible_os_family == "RedHat"
 
-    - name: Install icinga2 (RedHat)
-      ansible.builtin.dnf:
-        name:
-          - icinga2
-          - nagios-plugins-all
-        state: present
-      when: ansible_os_family == "RedHat"
+#     - name: Install icinga2 (RedHat)
+#       ansible.builtin.dnf:
+#         name:
+#           - icinga2
+#           - nagios-plugins-all
+#         state: present
+#       when: ansible_os_family == "RedHat"
 
-    - name: Ensure certificate directory exists
-      ansible.builtin.file:
-        path: "{{ icinga_cert_dir }}"
-        state: directory
-        owner: "{{ 'nagios' if ansible_os_family == 'Debian' else 'icinga' }}"
-        group: "{{ 'nagios' if ansible_os_family == 'Debian' else 'icinga' }}"
-        mode: "0755"
+#     - name: Ensure certificate directory exists
+#       ansible.builtin.file:
+#         path: "{{ icinga_cert_dir }}"
+#         state: directory
+#         owner: "{{ 'nagios' if ansible_os_family == 'Debian' else 'icinga' }}"
+#         group: "{{ 'nagios' if ansible_os_family == 'Debian' else 'icinga' }}"
+#         mode: "0755"
 
-    - name: Fetch trusted certificate from Icinga master
-      ansible.builtin.command:
-        cmd: >
-          icinga2 pki save-cert
-          --host {{ icinga_master_host }}
-          --port {{ icinga_master_port }}
-          --trustedcert {{ icinga_cert_dir }}/trusted-parent.crt
-        creates: "{{ icinga_cert_dir }}/trusted-parent.crt"
+#     - name: Fetch trusted certificate from Icinga master
+#       ansible.builtin.command:
+#         cmd: >
+#           icinga2 pki save-cert
+#           --host {{ icinga_master_host }}
+#           --port {{ icinga_master_port }}
+#           --trustedcert {{ icinga_cert_dir }}/trusted-parent.crt
+#         creates: "{{ icinga_cert_dir }}/trusted-parent.crt"
 
-    - name: Run icinga2 node setup with Director ticket
-      ansible.builtin.command:
-        cmd: >
-          icinga2 node setup
-          --ticket {{ icinga_ticket }}
-          --cn {{ inventory_hostname }}
-          --zone {{ inventory_hostname }}
-          --endpoint {{ icinga_parent_endpoint }}
-          --parent_host {{ icinga_master_host }}
-          --parent_zone {{ cluster_zone }}
-          --trustedcert {{ icinga_cert_dir }}/trusted-parent.crt
-          --accept-commands
-          --accept-config
-          --disable-confd
-          --global_zones director-global
-        creates: "{{ icinga_cert_dir }}/{{ inventory_hostname }}.crt"
-      notify: Restart icinga2
+#     - name: Run icinga2 node setup with Director ticket
+#       ansible.builtin.command:
+#         cmd: >
+#           icinga2 node setup
+#           --ticket {{ icinga_ticket }}
+#           --cn {{ inventory_hostname }}
+#           --zone {{ inventory_hostname }}
+#           --endpoint {{ icinga_parent_endpoint }}
+#           --parent_host {{ icinga_master_host }}
+#           --parent_zone {{ cluster_zone }}
+#           --trustedcert {{ icinga_cert_dir }}/trusted-parent.crt
+#           --accept-commands
+#           --accept-config
+#           --disable-confd
+#           --global_zones director-global
+#         creates: "{{ icinga_cert_dir }}/{{ inventory_hostname }}.crt"
+#       notify: Restart icinga2
 
-    - name: Enable and start icinga2
-      ansible.builtin.service:
-        name: icinga2
-        enabled: true
-        state: started
+#     - name: Enable and start icinga2
+#       ansible.builtin.service:
+#         name: icinga2
+#         enabled: true
+#         state: started
 
-  handlers:
-    - name: Restart icinga2
-      ansible.builtin.service:
-        name: icinga2
-        state: restarted
+#   handlers:
+#     - name: Restart icinga2
+#       ansible.builtin.service:
+#         name: icinga2
+#         state: restarted
