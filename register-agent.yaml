@@ -18,6 +18,7 @@
     icinga_master_host: "10.1.5.151"
     icinga_master_port: 5665
     generic_host_template_name: generic-host-lam
+    icinga_agent_template_name: icinga-agent-lam
 
   tasks:
     - name: Create {{ generic_host_template_name }} template in Director
@@ -46,7 +47,7 @@
 
     # Agent flags belong on a template. POST create is skipped if it already
     # exists, so the next task always writes has_agent=y onto the template.
-    - name: Create icinga-agent template in Director
+    - name: Create {{ icinga_agent_template_name }} template in Director
       ansible.builtin.uri:
         url: "{{ director_url }}/director/host"
         method: POST
@@ -58,7 +59,7 @@
           Accept: "application/json"
         body_format: json
         body:
-          object_name: icinga-agent
+          object_name: "{{ icinga_agent_template_name }}"
           object_type: template
           imports:
             - "{{ generic_host_template_name }}"
@@ -72,9 +73,9 @@
         - agent_template.status != 201
         - "'Trying to recreate' not in (agent_template.json.error | default(''))"
 
-    - name: Set agent flags on icinga-agent template
+    - name: Set agent flags on {{ icinga_agent_template_name }} template
       ansible.builtin.uri:
-        url: "{{ director_url }}/director/host?name=icinga-agent"
+        url: "{{ director_url }}/director/host?name={{ icinga_agent_template_name }}"
         method: POST
         url_username: "{{ icinga_web_user }}"
         url_password: "{{ icinga_web_pass }}"
@@ -122,7 +123,7 @@
           object_type: object
           address: "{{ host_ip }}"
           imports:
-            - icinga-agent
+            - "{{ icinga_agent_template_name }}"
           zone: "{{ cluster_zone }}"
           has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"
@@ -131,7 +132,7 @@
             os: Linux
         status_code: [201]
 
-    - name: Attach icinga-agent template to existing host
+    - name: Attach {{ icinga_agent_template_name }} template to existing host
       when: existing_host.status == 200
       ansible.builtin.uri:
         url: "{{ director_url }}/director/host?name={{ host_name }}"
@@ -146,7 +147,7 @@
         body:
           address: "{{ host_ip }}"
           imports:
-            - icinga-agent
+            - "{{ icinga_agent_template_name }}"
           zone: "{{ cluster_zone }}"
           has_agent: "{{ has_agent }}"
           master_should_connect: "{{ master_should_connect }}"
