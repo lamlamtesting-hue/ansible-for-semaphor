@@ -3,7 +3,7 @@
   hosts: localhost
   gather_facts: false
   vars:
-    director_url: "http://host.docker.internal:8080"
+    director_url: "http://10.1.5.151:8080"
     host_name: "lamtest-agent-01"
     # host_ip: "172.21.42.206"
     # Matches Director UI: Icinga Agent and zone settings
