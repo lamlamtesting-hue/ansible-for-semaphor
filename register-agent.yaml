@@ -23,8 +23,8 @@
     agent_winrm_scheme: http
     agent_winrm_transport: ntlm
     agent_winrm_server_cert_validation: ignore
-    agent_winrm_user: Administrator
-    agent_winrm_pass: ""
+    # agent_winrm_user: Administrator
+    # agent_winrm_pass: ""
 
   tasks:
     - name: Create {{ generic_host_template_name }} template in Director
