@@ -251,7 +251,13 @@
           - "{{ icinga_cert_dir }}\\trusted-parent.crt"
         creates: "{{ icinga_cert_dir }}\\trusted-parent.crt"
 
+    - name: Check if agent certificate already exists
+      ansible.windows.win_stat:
+        path: "{{ icinga_cert_dir }}\\{{ inventory_hostname }}.crt"
+      register: agent_cert
+
     - name: Run icinga2 node setup with Director ticket
+      when: not agent_cert.stat.exists
       ansible.windows.win_command:
         argv:
           - "{{ icinga2_exe }}"
@@ -274,15 +280,7 @@
           - --accept-commands
           - --accept-config
           - --disable-confd
-        creates: "{{ icinga_cert_dir }}\\node-setup.done"
       notify: Restart icinga2
-      register: icinga_node_setup
-
-    - name: Record successful node setup
-      ansible.windows.win_file:
-        path: "{{ icinga_cert_dir }}\\node-setup.done"
-        state: touch
-      when: icinga_node_setup is changed
 
     - name: Enable and start icinga2
       ansible.windows.win_service:
