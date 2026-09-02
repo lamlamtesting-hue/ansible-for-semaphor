@@ -1,0 +1,61 @@
+---
+# Prove WinRM login from Semaphore. Override host_ip, agent_winrm_user,
+# and agent_winrm_pass with extra vars. Defaults match register-agent.yaml.
+- name: Prepare WinRM target
+  hosts: localhost
+  gather_facts: false
+  vars:
+    # host_ip: "172.21.42.206"
+    agent_winrm_port: 5985
+    agent_winrm_scheme: http
+    agent_winrm_transport: ntlm
+    agent_winrm_server_cert_validation: ignore
+    # agent_winrm_user: Administrator
+    # agent_winrm_pass: ""
+    winrm_connect_timeout: 10
+
+  tasks:
+    - name: Fail when WinRM credentials are missing
+      ansible.builtin.fail:
+        msg: Set agent_winrm_user and agent_winrm_pass in Semaphore extra vars.
+      when: agent_winrm_user is not defined or agent_winrm_pass is not defined
+
+    - name: Check WinRM TCP port
+      ansible.builtin.wait_for:
+        host: "{{ host_ip }}"
+        port: "{{ agent_winrm_port }}"
+        timeout: "{{ winrm_connect_timeout }}"
+        state: started
+        msg: "WinRM {{ agent_winrm_scheme }} ({{ agent_winrm_port }}/tcp) is not reachable on {{ host_ip }}"
+
+    - name: Add target VM to in-memory inventory
+      ansible.builtin.add_host:
+        name: winrm-test
+        ansible_host: "{{ host_ip }}"
+        ansible_connection: winrm
+        ansible_port: "{{ agent_winrm_port }}"
+        ansible_user: "{{ agent_winrm_user }}"
+        ansible_password: "{{ agent_winrm_pass }}"
+        ansible_winrm_transport: "{{ agent_winrm_transport }}"
+        ansible_winrm_server_cert_validation: "{{ agent_winrm_server_cert_validation }}"
+        ansible_winrm_scheme: "{{ agent_winrm_scheme }}"
+        groups: winrm_targets
+
+- name: Test WinRM login
+  hosts: winrm_targets
+  gather_facts: true
+
+  tasks:
+    - name: WinRM ping
+      ansible.windows.win_ping:
+
+    - name: WinRM login summary
+      ansible.builtin.debug:
+        msg: |
+          === WinRM login {{ ansible_host }} ===
+          ping: pong
+          hostname: {{ ansible_hostname | default('unknown') }}
+          os: {{ ansible_os_name | default('unknown') }} {{ ansible_os_version | default('') }}
+          connection: {{ ansible_connection }} {{ ansible_winrm_scheme }}://{{ ansible_host }}:{{ ansible_port }}
+          transport: {{ ansible_winrm_transport }}
+          user: {{ ansible_user }}
