@@ -274,10 +274,15 @@
           - --accept-commands
           - --accept-config
           - --disable-confd
-          - --global_zones
-          - director-global
-        creates: "{{ icinga_cert_dir }}\\{{ inventory_hostname }}.crt"
+        creates: "{{ icinga_cert_dir }}\\node-setup.done"
       notify: Restart icinga2
+      register: icinga_node_setup
+
+    - name: Record successful node setup
+      ansible.windows.win_file:
+        path: "{{ icinga_cert_dir }}\\node-setup.done"
+        state: touch
+      when: icinga_node_setup is changed
 
     - name: Enable and start icinga2
       ansible.windows.win_service:
