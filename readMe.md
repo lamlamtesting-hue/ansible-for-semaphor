@@ -35,7 +35,7 @@ WinRM to host_ip  ──  node setup --cn <cn> --endpoint <icinga_master_cn>
 
 Use **Variable Groups → Extra variables → JSON** (not TABLE). Semaphore passes that object as Ansible extra vars. Playbook defaults apply for any key you omit.
 
-Put passwords in the **Secrets** tab of the same group (`icinga_web_pass`, `agent_winrm_pass`) so they are not stored in the JSON editor.
+Put shared passwords in the **Secrets** tab (`icinga_web_pass`, and `agent_winrm_pass` if every VM uses the same login). If WinRM user/password differ per IP, set `agent_winrm_user` / `agent_winrm_pass` on that host in JSON.
 
 **One VM:**
 
@@ -46,11 +46,12 @@ Put passwords in the **Secrets** tab of the same group (`icinga_web_pass`, `agen
   "icinga_master_cn": "icinga2",
   "cluster_zone": "master",
   "icinga_web_user": "admin",
-  "agent_winrm_user": "Administrator"
+  "agent_winrm_user": "Administrator",
+  "agent_winrm_pass": "pass-a"
 }
 ```
 
-**Several VMs** — each item needs `host_ip`, `cn`, and `cluster_zone` (`master`, `LC-icinga-slave01`, or `lc-satellites`). Default `cluster_zone` / `icinga_master_cn` apply if omitted on an item.
+**Several VMs** — each item needs `host_ip`, `cn`, and `cluster_zone` (`master`, `LC-icinga-slave01`, or `lc-satellites`). Default `cluster_zone` / `icinga_master_cn` / WinRM login apply if omitted on an item.
 
 ```json
 {
@@ -58,11 +59,10 @@ Put passwords in the **Secrets** tab of the same group (`icinga_web_pass`, `agen
   "icinga_master_cn": "icinga2",
   "cluster_zone": "master",
   "icinga_web_user": "admin",
-  "agent_winrm_user": "Administrator",
   "icinga_agent_hosts": [
-    { "host_ip": "10.1.5.10", "cn": "win-agent-01", "cluster_zone": "master" },
-    { "host_ip": "10.1.5.11", "cn": "win-agent-02", "cluster_zone": "LC-icinga-slave01", "icinga_master_cn": "LC-icinga-slave01" },
-    { "host_ip": "10.1.5.12", "cn": "win-agent-03", "cluster_zone": "lc-satellites" }
+    { "host_ip": "10.1.5.10", "cn": "win-agent-01", "cluster_zone": "master", "agent_winrm_user": "Administrator", "agent_winrm_pass": "pass-a" },
+    { "host_ip": "10.1.5.11", "cn": "win-agent-02", "cluster_zone": "LC-icinga-slave01", "icinga_master_cn": "LC-icinga-slave01", "agent_winrm_user": "otheradmin", "agent_winrm_pass": "pass-b" },
+    { "host_ip": "10.1.5.12", "cn": "win-agent-03", "cluster_zone": "lc-satellites", "agent_winrm_user": "Administrator", "agent_winrm_pass": "pass-c" }
   ]
 }
 ```

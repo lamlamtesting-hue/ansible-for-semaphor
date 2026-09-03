@@ -10,9 +10,9 @@
 #   "icinga_master_cn": "icinga2",
 #   "cluster_zone": "master",
 #   "icinga_agent_hosts": [
-#     { "host_ip": "10.1.5.10", "cn": "win-agent-01", "cluster_zone": "master" },
-#     { "host_ip": "10.1.5.11", "cn": "win-agent-02", "cluster_zone": "LC-icinga-slave01", "icinga_master_cn": "LC-icinga-slave01" },
-#     { "host_ip": "10.1.5.12", "cn": "win-agent-03", "cluster_zone": "lc-satellites" }
+#     { "host_ip": "10.1.5.10", "cn": "win-agent-01", "cluster_zone": "master", "agent_winrm_user": "Administrator", "agent_winrm_pass": "pass-a" },
+#     { "host_ip": "10.1.5.11", "cn": "win-agent-02", "cluster_zone": "LC-icinga-slave01", "icinga_master_cn": "LC-icinga-slave01", "agent_winrm_user": "otheradmin", "agent_winrm_pass": "pass-b" },
+#     { "host_ip": "10.1.5.12", "cn": "win-agent-03", "cluster_zone": "lc-satellites", "agent_winrm_user": "Administrator", "agent_winrm_pass": "pass-c" }
 #   ]
 # }
     has_agent: "y"
@@ -48,7 +48,9 @@
           - item.host_ip | length > 0
           - (item.cn | default(item.host_name | default('')) | length > 0)
           - (item.cluster_zone | default(cluster_zone | default('')) | length > 0)
-        fail_msg: Each agent needs host_ip, cn, and cluster_zone (Director: master, LC-icinga-slave01, or lc-satellites).
+          - (item.agent_winrm_user | default(agent_winrm_user | default('')) | length > 0)
+          - (item.agent_winrm_pass | default(agent_winrm_pass | default('')) | length > 0)
+        fail_msg: Each agent needs host_ip, cn, cluster_zone, and WinRM user/pass (per host or top-level default).
       loop: "{{ agent_hosts }}"
       loop_control:
         label: "{{ item.host_ip | default('missing host_ip') }}"
