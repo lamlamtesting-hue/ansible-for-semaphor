@@ -14,6 +14,14 @@
  .NOTES
 
 #>
+
+# Server 2012 R2 / old .NET default to TLS 1.0. packages.icinga.com requires TLS 1.2.
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+} catch {
+    [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
+}
+
 function Icinga2AgentModule {
 
     #
@@ -806,6 +814,11 @@ function Icinga2AgentModule {
             $this.info([string]::Format('Downloading Icinga 2 Agent Binary from "{0}"', $url));
 
             Try {
+                try {
+                    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                } catch {
+                    [Net.ServicePointManager]::SecurityProtocol = [Enum]::ToObject([Net.SecurityProtocolType], 3072)
+                }
                 [System.Object]$client = New-Object System.Net.WebClient;
                 $client.DownloadFile($url, $this.getInstallerPath());
 
@@ -3409,4 +3422,5 @@ exit Icinga2AgentModule `
     -ParentEndpoints      'LC-icinga-slave01' `
     -CAServer             'icinga2' `
     -InstallAgentVersion  '2.16.5' `
+    -DownloadUrl          "$PSScriptRoot\" `
     -RunInstaller
