@@ -3406,6 +3406,6 @@ exit Icinga2AgentModule `
     -AgentName       'hklabpos01.lc_hk.com' `
     -Ticket          '92e0e337726ab0789dedd6e8265f8f319987ec1d' `
     -ParentZone      'LC-icinga-slave01' `
-    -ParentEndpoints  `
+    -ParentEndpoints 'LC-icinga-slave01' `
     -CAServer        'icinga2' `
     -RunInstaller
