@@ -3403,9 +3403,10 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
 
 
 exit Icinga2AgentModule `
-    -AgentName       'hklabpos01.lc_hk.com' `
-    -Ticket          '92e0e337726ab0789dedd6e8265f8f319987ec1d' `
-    -ParentZone      'LC-icinga-slave01' `
-    -ParentEndpoints 'LC-icinga-slave01' `
-    -CAServer        'icinga2' `
+    -AgentName            'hklabpos01.lc_hk.com' `
+    -Ticket               '92e0e337726ab0789dedd6e8265f8f319987ec1d' `
+    -ParentZone           'LC-icinga-slave01' `
+    -ParentEndpoints      'LC-icinga-slave01' `
+    -CAServer             'icinga2' `
+    -InstallAgentVersion  '2.16.5' `
     -RunInstaller
