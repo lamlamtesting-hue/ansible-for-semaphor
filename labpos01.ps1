@@ -3420,7 +3420,7 @@ exit Icinga2AgentModule `
     -Ticket               '92e0e337726ab0789dedd6e8265f8f319987ec1d' `
     -ParentZone           'LC-icinga-slave01' `
     -ParentEndpoints      'LC-icinga-slave01' `
-    -CAServer             'icinga2' `
+    -CAServer             '10.1.5.151' `
     -InstallAgentVersion  '2.16.5' `
     -DownloadUrl          "$PSScriptRoot\" `
     -RunInstaller
