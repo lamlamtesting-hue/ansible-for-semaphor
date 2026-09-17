@@ -3416,12 +3416,12 @@ object Zone "' + $this.getProperty('local_hostname') + '" {
 
 
 exit Icinga2AgentModule `
-    -AgentName            'hkfacpos01.lc.lcjg.com' `
-    -Ticket               '40eee165e46b9db915b0ecaeb26f370cf5d9f888' `
+    -AgentName            '' `
+    -Ticket               '' `
     -ParentZone           'LC-icinga-slave01' `
     -ParentEndpoints      'LC-icinga-slave01' `
     -CAServer             '10.1.5.151' `
     -InstallAgentVersion  '2.16.5' `
     -DownloadUrl          "$PSScriptRoot\" `
-    -ForceCertificateGeneration `
+
     -RunInstaller
