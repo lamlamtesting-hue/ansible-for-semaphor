@@ -1,0 +1,2 @@
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\labpos01.ps1
