@@ -3423,5 +3423,4 @@ exit Icinga2AgentModule `
     -CAServer             '10.1.5.151' `
     -InstallAgentVersion  '2.16.5' `
     -DownloadUrl          "$PSScriptRoot\" `
-
     -RunInstaller
